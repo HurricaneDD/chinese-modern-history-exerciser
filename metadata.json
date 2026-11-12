@@ -1,0 +1,6 @@
+{
+  "name": "近现代史刷题",
+  "description": "中国近现代史纲要课程单选题复习与刷题应用，支持按章节顺序学习、随机刷题、错题加权专练及题库统计。",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
