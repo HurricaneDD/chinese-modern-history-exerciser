@@ -200,6 +200,13 @@ class QuizViewModel(
         }
     }
 
+    private var autoAdvanceJob: kotlinx.coroutines.Job? = null
+
+    private fun cancelAutoAdvance() {
+        autoAdvanceJob?.cancel()
+        autoAdvanceJob = null
+    }
+
     private fun persistStudyProgress(chapter: Int?, index: Int) {
         prefs?.edit()
             ?.putInt(KEY_SAVED_STUDY_CHAPTER, chapter ?: -1)
@@ -212,6 +219,7 @@ class QuizViewModel(
      */
     fun selectMainTab(tab: AppTab) {
         if (tab != AppTab.HOME && tab != AppTab.QUESTION_BANK) return
+        cancelAutoAdvance()
         controlState.update { state ->
             state.copy(
                 currentTab = tab,
@@ -230,6 +238,7 @@ class QuizViewModel(
      * and returns cleanly to HOME while preserving saved study progress.
      */
     fun exitActiveModeToHome() {
+        cancelAutoAdvance()
         controlState.update { state ->
             state.copy(
                 currentTab = AppTab.HOME,
@@ -262,6 +271,7 @@ class QuizViewModel(
     }
 
     fun enterStudyModeFromStart() {
+        cancelAutoAdvance()
         persistStudyProgress(chapter = null, index = 0)
         controlState.update {
             it.copy(
@@ -282,6 +292,7 @@ class QuizViewModel(
     }
 
     fun enterStudyModeContinue() {
+        cancelAutoAdvance()
         controlState.update {
             it.copy(
                 currentTab = AppTab.STUDY,
@@ -298,6 +309,7 @@ class QuizViewModel(
     }
 
     fun setStudyChapter(chapter: Int?) {
+        cancelAutoAdvance()
         persistStudyProgress(chapter = chapter, index = 0)
         controlState.update {
             it.copy(
@@ -311,6 +323,7 @@ class QuizViewModel(
     }
 
     fun jumpToStudyIndex(index: Int) {
+        cancelAutoAdvance()
         val maxIndex = (uiState.value.studyQuestions.size - 1).coerceAtLeast(0)
         val clamped = index.coerceIn(0, maxIndex)
         persistStudyProgress(chapter = controlState.value.studyChapterFilter, index = clamped)
@@ -324,6 +337,7 @@ class QuizViewModel(
     }
 
     fun nextStudyQuestion() {
+        cancelAutoAdvance()
         val list = uiState.value.studyQuestions
         if (list.isEmpty()) return
         val nextIdx = (controlState.value.studyIndex + 1).coerceAtMost(list.size - 1)
@@ -338,6 +352,7 @@ class QuizViewModel(
     }
 
     fun previousStudyQuestion() {
+        cancelAutoAdvance()
         val prevIdx = (controlState.value.studyIndex - 1).coerceAtLeast(0)
         persistStudyProgress(chapter = controlState.value.studyChapterFilter, index = prevIdx)
         controlState.update {
@@ -356,11 +371,25 @@ class QuizViewModel(
     fun selectStudyOption(option: String) {
         val currentControl = controlState.value
         if (currentControl.studySelectedOption != null) return
+        val question = uiState.value.currentStudyQuestion ?: return
+        val isCorrect = option.equals(question.correctOption, ignoreCase = true)
         controlState.update { it.copy(studySelectedOption = option) }
+
+        if (isCorrect) {
+            cancelAutoAdvance()
+            autoAdvanceJob = viewModelScope.launch {
+                kotlinx.coroutines.delay(260L)
+                val list = uiState.value.studyQuestions
+                if (controlState.value.studyIndex < list.size - 1) {
+                    nextStudyQuestion()
+                }
+            }
+        }
     }
 
     // ---------------- Practice Mode Actions (刷题模式) ----------------
     fun startNewPracticeSession() {
+        cancelAutoAdvance()
         val allIds = uiState.value.allQuestions.map { it.id }.shuffled()
         controlState.update {
             it.copy(
@@ -396,9 +425,18 @@ class QuizViewModel(
         viewModelScope.launch {
             repository.recordAnswer(questionId = question.id, isWrong = isWrong)
         }
+
+        if (!isWrong) {
+            cancelAutoAdvance()
+            autoAdvanceJob = viewModelScope.launch {
+                kotlinx.coroutines.delay(260L)
+                nextPracticeQuestion()
+            }
+        }
     }
 
     fun nextPracticeQuestion() {
+        cancelAutoAdvance()
         val state = controlState.value
         val total = state.practiceQueueIds.size
         if (total == 0) return
@@ -421,6 +459,7 @@ class QuizViewModel(
     }
 
     fun exitPracticeMidway() {
+        cancelAutoAdvance()
         controlState.update {
             it.copy(
                 practiceSessionActive = false,
@@ -431,6 +470,7 @@ class QuizViewModel(
 
     // ---------------- Wrong-Question Drill Mode Actions (错题专练模式) ----------------
     fun enterWrongDrillMode() {
+        cancelAutoAdvance()
         val wrongList = uiState.value.wrongQuestions
         val picked = QuestionRepository.pickWeightedWrongQuestion(wrongQuestions = wrongList)
         controlState.update {
@@ -450,6 +490,7 @@ class QuizViewModel(
     }
 
     fun startOrNextWrongDrillQuestion() {
+        cancelAutoAdvance()
         val wrongList = uiState.value.wrongQuestions
         val currentId = controlState.value.drillCurrentQuestionId
         val picked = QuestionRepository.pickWeightedWrongQuestion(
@@ -481,6 +522,14 @@ class QuizViewModel(
         }
         viewModelScope.launch {
             repository.recordAnswer(questionId = question.id, isWrong = isWrong)
+        }
+
+        if (!isWrong) {
+            cancelAutoAdvance()
+            autoAdvanceJob = viewModelScope.launch {
+                kotlinx.coroutines.delay(260L)
+                startOrNextWrongDrillQuestion()
+            }
         }
     }
 
