@@ -1,5 +1,6 @@
 package com.example.ui
 
+import android.content.SharedPreferences
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -30,12 +31,14 @@ enum class BankSortOrder(val label: String) {
 
 data class InternalControlState(
     val currentTab: AppTab = AppTab.HOME,
-    // Study Mode (学习模式：按单元和题号顺序)
+    // Study Mode (学习模式：按单元和题号顺序，支持进度记忆与进入询问)
+    val showStudyEntryDialog: Boolean = false,
+    val savedStudyChapterFilter: Int? = null,
+    val savedStudyIndex: Int = 0,
     val studyChapterFilter: Int? = null, // null = all chapters in order
     val studyIndex: Int = 0,
     val studySelectedOption: String? = null,
     val studyMemorizeMode: Boolean = false,
-    val studyRecordStats: Boolean = false,
     // Practice Mode (刷题模式：随机打乱，记录数据，可半途退出)
     val practiceQueueIds: List<Int> = emptyList(),
     val practiceIndex: Int = 0,
@@ -84,6 +87,24 @@ data class QuizUiState(
 
     val currentStudyQuestion: QuestionEntity?
         get() = studyQuestions.getOrNull(control.studyIndex.coerceIn(0, (studyQuestions.size - 1).coerceAtLeast(0)))
+
+    // Saved study progress description for the entry prompt dialog
+    val savedStudyProgressLabel: String
+        get() {
+            val chapterPool = if (control.savedStudyChapterFilter == null) {
+                allQuestions
+            } else {
+                allQuestions.filter { it.chapterNumber == control.savedStudyChapterFilter }
+            }
+            val safeIdx = control.savedStudyIndex.coerceIn(0, (chapterPool.size - 1).coerceAtLeast(0))
+            val q = chapterPool.getOrNull(safeIdx)
+            val scopeText = control.savedStudyChapterFilter?.let { "第${it}章" } ?: "全部章节"
+            return if (q != null) {
+                "$scopeText · 第 ${safeIdx + 1}/${chapterPool.size} 题（第${q.chapterNumber}章第${q.questionNumber}题）"
+            } else {
+                "$scopeText · 第 ${safeIdx + 1} 题"
+            }
+        }
 
     // Practice Mode derived question
     private val questionById: Map<Int, QuestionEntity>
@@ -139,8 +160,24 @@ data class QuizUiState(
         }
 }
 
-class QuizViewModel(private val repository: QuestionRepository) : ViewModel() {
-    private val controlState = MutableStateFlow(InternalControlState())
+class QuizViewModel(
+    private val repository: QuestionRepository,
+    private val prefs: SharedPreferences? = null
+) : ViewModel() {
+    companion object {
+        private const val KEY_SAVED_STUDY_CHAPTER = "saved_study_chapter"
+        private const val KEY_SAVED_STUDY_INDEX = "saved_study_index"
+    }
+
+    private val initialSavedChapter: Int? = prefs?.getInt(KEY_SAVED_STUDY_CHAPTER, -1)?.takeIf { it in 1..10 }
+    private val initialSavedIndex: Int = prefs?.getInt(KEY_SAVED_STUDY_INDEX, 0)?.coerceAtLeast(0) ?: 0
+
+    private val controlState = MutableStateFlow(
+        InternalControlState(
+            savedStudyChapterFilter = initialSavedChapter,
+            savedStudyIndex = initialSavedIndex
+        )
+    )
 
     val uiState: StateFlow<QuizUiState> = combine(
         repository.allQuestionsFlow,
@@ -163,39 +200,111 @@ class QuizViewModel(private val repository: QuestionRepository) : ViewModel() {
         }
     }
 
-    fun selectTab(tab: AppTab) {
-        val snapshot = uiState.value
+    private fun persistStudyProgress(chapter: Int?, index: Int) {
+        prefs?.edit()
+            ?.putInt(KEY_SAVED_STUDY_CHAPTER, chapter ?: -1)
+            ?.putInt(KEY_SAVED_STUDY_INDEX, index)
+            ?.apply()
+    }
+
+    /**
+     * Bottom navigation only switches between HOME and QUESTION_BANK.
+     */
+    fun selectMainTab(tab: AppTab) {
+        if (tab != AppTab.HOME && tab != AppTab.QUESTION_BANK) return
         controlState.update { state ->
-            var next = state.copy(currentTab = tab)
-            if (tab == AppTab.PRACTICE && next.practiceQueueIds.isEmpty() && snapshot.allQuestions.isNotEmpty()) {
-                next = next.copy(
-                    practiceQueueIds = snapshot.allQuestions.map { it.id }.shuffled(),
-                    practiceIndex = 0,
-                    practiceSelectedOption = null,
-                    practiceSessionActive = true,
-                    practiceExitedSummary = false,
-                    practiceSessionAnswered = 0,
-                    practiceSessionCorrect = 0,
-                    practiceSessionWrong = 0
-                )
-            }
-            if (tab == AppTab.WRONG_DRILL && next.drillCurrentQuestionId == null) {
-                val picked = QuestionRepository.pickWeightedWrongQuestion(snapshot.wrongQuestions)
-                next = next.copy(
-                    drillCurrentQuestionId = picked?.id,
-                    drillSelectedOption = null
-                )
-            }
-            next
+            state.copy(
+                currentTab = tab,
+                showStudyEntryDialog = false,
+                practiceQueueIds = emptyList(),
+                practiceSessionActive = false,
+                practiceExitedSummary = false,
+                drillCurrentQuestionId = null,
+                drillSelectedOption = null
+            )
         }
     }
 
-    // ---------------- Study Mode Actions ----------------
+    /**
+     * Exits whichever active mode (Study / Practice / Wrong Drill) is currently running
+     * and returns cleanly to HOME while preserving saved study progress.
+     */
+    fun exitActiveModeToHome() {
+        controlState.update { state ->
+            state.copy(
+                currentTab = AppTab.HOME,
+                showStudyEntryDialog = false,
+                studySelectedOption = null,
+                practiceQueueIds = emptyList(),
+                practiceIndex = 0,
+                practiceSelectedOption = null,
+                practiceSessionActive = false,
+                practiceExitedSummary = false,
+                practiceSessionAnswered = 0,
+                practiceSessionCorrect = 0,
+                practiceSessionWrong = 0,
+                drillCurrentQuestionId = null,
+                drillSelectedOption = null,
+                drillSessionAnswered = 0,
+                drillSessionWrongAgain = 0,
+                drillSessionCorrect = 0
+            )
+        }
+    }
+
+    // ---------------- Study Mode Actions (学习模式：含记忆与询问弹窗) ----------------
+    fun requestEnterStudyMode() {
+        controlState.update { it.copy(showStudyEntryDialog = true) }
+    }
+
+    fun dismissStudyEntryDialog() {
+        controlState.update { it.copy(showStudyEntryDialog = false) }
+    }
+
+    fun enterStudyModeFromStart() {
+        persistStudyProgress(chapter = null, index = 0)
+        controlState.update {
+            it.copy(
+                currentTab = AppTab.STUDY,
+                showStudyEntryDialog = false,
+                savedStudyChapterFilter = null,
+                savedStudyIndex = 0,
+                studyChapterFilter = null,
+                studyIndex = 0,
+                studySelectedOption = null,
+                studyMemorizeMode = false,
+                practiceQueueIds = emptyList(),
+                practiceSessionActive = false,
+                practiceExitedSummary = false,
+                drillCurrentQuestionId = null
+            )
+        }
+    }
+
+    fun enterStudyModeContinue() {
+        controlState.update {
+            it.copy(
+                currentTab = AppTab.STUDY,
+                showStudyEntryDialog = false,
+                studyChapterFilter = it.savedStudyChapterFilter,
+                studyIndex = it.savedStudyIndex,
+                studySelectedOption = null,
+                practiceQueueIds = emptyList(),
+                practiceSessionActive = false,
+                practiceExitedSummary = false,
+                drillCurrentQuestionId = null
+            )
+        }
+    }
+
     fun setStudyChapter(chapter: Int?) {
+        persistStudyProgress(chapter = chapter, index = 0)
         controlState.update {
             it.copy(
                 studyChapterFilter = chapter,
                 studyIndex = 0,
+                savedStudyChapterFilter = chapter,
+                savedStudyIndex = 0,
                 studySelectedOption = null
             )
         }
@@ -203,9 +312,12 @@ class QuizViewModel(private val repository: QuestionRepository) : ViewModel() {
 
     fun jumpToStudyIndex(index: Int) {
         val maxIndex = (uiState.value.studyQuestions.size - 1).coerceAtLeast(0)
+        val clamped = index.coerceIn(0, maxIndex)
+        persistStudyProgress(chapter = controlState.value.studyChapterFilter, index = clamped)
         controlState.update {
             it.copy(
-                studyIndex = index.coerceIn(0, maxIndex),
+                studyIndex = clamped,
+                savedStudyIndex = clamped,
                 studySelectedOption = null
             )
         }
@@ -214,16 +326,26 @@ class QuizViewModel(private val repository: QuestionRepository) : ViewModel() {
     fun nextStudyQuestion() {
         val list = uiState.value.studyQuestions
         if (list.isEmpty()) return
+        val nextIdx = (controlState.value.studyIndex + 1).coerceAtMost(list.size - 1)
+        persistStudyProgress(chapter = controlState.value.studyChapterFilter, index = nextIdx)
         controlState.update {
-            val nextIdx = (it.studyIndex + 1).coerceAtMost(list.size - 1)
-            it.copy(studyIndex = nextIdx, studySelectedOption = null)
+            it.copy(
+                studyIndex = nextIdx,
+                savedStudyIndex = nextIdx,
+                studySelectedOption = null
+            )
         }
     }
 
     fun previousStudyQuestion() {
+        val prevIdx = (controlState.value.studyIndex - 1).coerceAtLeast(0)
+        persistStudyProgress(chapter = controlState.value.studyChapterFilter, index = prevIdx)
         controlState.update {
-            val prevIdx = (it.studyIndex - 1).coerceAtLeast(0)
-            it.copy(studyIndex = prevIdx, studySelectedOption = null)
+            it.copy(
+                studyIndex = prevIdx,
+                savedStudyIndex = prevIdx,
+                studySelectedOption = null
+            )
         }
     }
 
@@ -231,21 +353,10 @@ class QuizViewModel(private val repository: QuestionRepository) : ViewModel() {
         controlState.update { it.copy(studyMemorizeMode = !it.studyMemorizeMode) }
     }
 
-    fun toggleStudyRecordStats() {
-        controlState.update { it.copy(studyRecordStats = !it.studyRecordStats) }
-    }
-
     fun selectStudyOption(option: String) {
         val currentControl = controlState.value
         if (currentControl.studySelectedOption != null) return
-        val question = uiState.value.currentStudyQuestion ?: return
         controlState.update { it.copy(studySelectedOption = option) }
-        if (currentControl.studyRecordStats) {
-            val isWrong = !option.equals(question.correctOption, ignoreCase = true)
-            viewModelScope.launch {
-                repository.recordAnswer(question.id, isWrong = isWrong)
-            }
-        }
     }
 
     // ---------------- Practice Mode Actions (刷题模式) ----------------
@@ -254,6 +365,7 @@ class QuizViewModel(private val repository: QuestionRepository) : ViewModel() {
         controlState.update {
             it.copy(
                 currentTab = AppTab.PRACTICE,
+                showStudyEntryDialog = false,
                 practiceQueueIds = allIds,
                 practiceIndex = 0,
                 practiceSelectedOption = null,
@@ -261,7 +373,8 @@ class QuizViewModel(private val repository: QuestionRepository) : ViewModel() {
                 practiceExitedSummary = false,
                 practiceSessionAnswered = 0,
                 practiceSessionCorrect = 0,
-                practiceSessionWrong = 0
+                practiceSessionWrong = 0,
+                drillCurrentQuestionId = null
             )
         }
     }
@@ -290,7 +403,6 @@ class QuizViewModel(private val repository: QuestionRepository) : ViewModel() {
         val total = state.practiceQueueIds.size
         if (total == 0) return
         if (state.practiceIndex + 1 >= total) {
-            // Completed all shuffled questions
             controlState.update {
                 it.copy(
                     practiceSessionActive = false,
@@ -317,16 +429,26 @@ class QuizViewModel(private val repository: QuestionRepository) : ViewModel() {
         }
     }
 
-    fun resumePracticeSession() {
+    // ---------------- Wrong-Question Drill Mode Actions (错题专练模式) ----------------
+    fun enterWrongDrillMode() {
+        val wrongList = uiState.value.wrongQuestions
+        val picked = QuestionRepository.pickWeightedWrongQuestion(wrongQuestions = wrongList)
         controlState.update {
             it.copy(
-                practiceSessionActive = true,
+                currentTab = AppTab.WRONG_DRILL,
+                showStudyEntryDialog = false,
+                drillCurrentQuestionId = picked?.id,
+                drillSelectedOption = null,
+                drillSessionAnswered = 0,
+                drillSessionWrongAgain = 0,
+                drillSessionCorrect = 0,
+                practiceQueueIds = emptyList(),
+                practiceSessionActive = false,
                 practiceExitedSummary = false
             )
         }
     }
 
-    // ---------------- Wrong-Question Drill Mode Actions (错题专练模式) ----------------
     fun startOrNextWrongDrillQuestion() {
         val wrongList = uiState.value.wrongQuestions
         val currentId = controlState.value.drillCurrentQuestionId
@@ -426,10 +548,13 @@ class QuizViewModel(private val repository: QuestionRepository) : ViewModel() {
         }
     }
 
-    class Factory(private val repository: QuestionRepository) : ViewModelProvider.Factory {
+    class Factory(
+        private val repository: QuestionRepository,
+        private val prefs: SharedPreferences? = null
+    ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            return QuizViewModel(repository) as T
+            return QuizViewModel(repository, prefs) as T
         }
     }
 }

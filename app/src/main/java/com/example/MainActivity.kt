@@ -11,11 +11,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LibraryBooks
-import androidx.compose.material.icons.filled.Psychology
-import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -53,11 +50,12 @@ class MainActivity : ComponentActivity() {
 
         val database = AppDatabase.getInstance(applicationContext)
         val repository = QuestionRepository(database.questionDao())
+        val prefs = getSharedPreferences("modern_history_quiz_prefs", MODE_PRIVATE)
 
         setContent {
             MyApplicationTheme {
                 val quizViewModel: QuizViewModel = viewModel(
-                    factory = QuizViewModel.Factory(repository)
+                    factory = QuizViewModel.Factory(repository, prefs)
                 )
                 val uiState by quizViewModel.uiState.collectAsStateWithLifecycle()
 
@@ -77,75 +75,60 @@ fun ModernHistoryQuizApp(
     viewModel: QuizViewModel
 ) {
     val currentTab = uiState.control.currentTab
+    val isMainTab = currentTab == AppTab.HOME || currentTab == AppTab.QUESTION_BANK
 
     if (currentTab != AppTab.HOME) {
         BackHandler {
-            viewModel.selectTab(AppTab.HOME)
+            if (currentTab == AppTab.PRACTICE && uiState.control.practiceSessionActive) {
+                viewModel.exitPracticeMidway()
+            } else {
+                viewModel.exitActiveModeToHome()
+            }
         }
     }
 
     Scaffold(
         contentWindowInsets = WindowInsets.safeDrawing,
         topBar = {
-            CenterAlignedTopAppBar(
-                title = {
-                    Text(
-                        text = when (currentTab) {
-                            AppTab.HOME -> "近现代史纲要刷题"
-                            AppTab.STUDY -> "学习模式 · 顺序研读"
-                            AppTab.PRACTICE -> "刷题模式 · 随机打乱"
-                            AppTab.WRONG_DRILL -> "错题专练 · 加权高频"
-                            AppTab.QUESTION_BANK -> "查看题库 · 统计与错题榜"
-                        },
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
+            if (isMainTab) {
+                CenterAlignedTopAppBar(
+                    title = {
+                        Text(
+                            text = when (currentTab) {
+                                AppTab.QUESTION_BANK -> "查看题库 · 统计与错题榜"
+                                else -> "近现代史纲要刷题"
+                            },
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                    },
+                    colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        titleContentColor = MaterialTheme.colorScheme.onSurface
                     )
-                },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface
                 )
-            )
+            }
         },
         bottomBar = {
-            NavigationBar(
-                modifier = Modifier.testTag("bottom_navigation_bar")
-            ) {
-                NavigationBarItem(
-                    selected = currentTab == AppTab.HOME,
-                    onClick = { viewModel.selectTab(AppTab.HOME) },
-                    icon = { Icon(Icons.Default.Home, contentDescription = "首页") },
-                    label = { Text("首页") },
-                    modifier = Modifier.testTag("nav_tab_home")
-                )
-                NavigationBarItem(
-                    selected = currentTab == AppTab.STUDY,
-                    onClick = { viewModel.selectTab(AppTab.STUDY) },
-                    icon = { Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = "学习模式") },
-                    label = { Text("学习模式") },
-                    modifier = Modifier.testTag("nav_tab_study")
-                )
-                NavigationBarItem(
-                    selected = currentTab == AppTab.PRACTICE,
-                    onClick = { viewModel.selectTab(AppTab.PRACTICE) },
-                    icon = { Icon(Icons.Default.Shuffle, contentDescription = "刷题模式") },
-                    label = { Text("刷题模式") },
-                    modifier = Modifier.testTag("nav_tab_practice")
-                )
-                NavigationBarItem(
-                    selected = currentTab == AppTab.WRONG_DRILL,
-                    onClick = { viewModel.selectTab(AppTab.WRONG_DRILL) },
-                    icon = { Icon(Icons.Default.Psychology, contentDescription = "错题专练") },
-                    label = { Text("错题专练") },
-                    modifier = Modifier.testTag("nav_tab_wrong_drill")
-                )
-                NavigationBarItem(
-                    selected = currentTab == AppTab.QUESTION_BANK,
-                    onClick = { viewModel.selectTab(AppTab.QUESTION_BANK) },
-                    icon = { Icon(Icons.Default.LibraryBooks, contentDescription = "查看题库") },
-                    label = { Text("查看题库") },
-                    modifier = Modifier.testTag("nav_tab_bank")
-                )
+            if (isMainTab) {
+                NavigationBar(
+                    modifier = Modifier.testTag("bottom_navigation_bar")
+                ) {
+                    NavigationBarItem(
+                        selected = currentTab == AppTab.HOME,
+                        onClick = { viewModel.selectMainTab(AppTab.HOME) },
+                        icon = { Icon(Icons.Default.Home, contentDescription = "首页") },
+                        label = { Text("首页") },
+                        modifier = Modifier.testTag("nav_tab_home")
+                    )
+                    NavigationBarItem(
+                        selected = currentTab == AppTab.QUESTION_BANK,
+                        onClick = { viewModel.selectMainTab(AppTab.QUESTION_BANK) },
+                        icon = { Icon(Icons.Default.LibraryBooks, contentDescription = "查看题库") },
+                        label = { Text("查看题库") },
+                        modifier = Modifier.testTag("nav_tab_bank")
+                    )
+                }
             }
         }
     ) { innerPadding ->
@@ -165,22 +148,24 @@ fun ModernHistoryQuizApp(
                 when (currentTab) {
                     AppTab.HOME -> HomeScreen(
                         uiState = uiState,
-                        onSelectStudy = { viewModel.selectTab(AppTab.STUDY) },
-                        onSelectPractice = { viewModel.selectTab(AppTab.PRACTICE) },
-                        onSelectWrongDrill = { viewModel.selectTab(AppTab.WRONG_DRILL) },
-                        onSelectBank = { viewModel.selectTab(AppTab.QUESTION_BANK) },
+                        onSelectStudy = { viewModel.requestEnterStudyMode() },
+                        onDismissStudyDialog = { viewModel.dismissStudyEntryDialog() },
+                        onStartStudyFromBeginning = { viewModel.enterStudyModeFromStart() },
+                        onContinueLastStudy = { viewModel.enterStudyModeContinue() },
+                        onSelectPractice = { viewModel.startNewPracticeSession() },
+                        onSelectWrongDrill = { viewModel.enterWrongDrillMode() },
                         onOpenWrongBankSorted = { viewModel.openBankWithWrongFilterSortedByErrorRate() }
                     )
 
                     AppTab.STUDY -> StudyModeScreen(
                         uiState = uiState,
+                        onExitMode = { viewModel.exitActiveModeToHome() },
                         onSelectChapter = viewModel::setStudyChapter,
                         onSelectOption = viewModel::selectStudyOption,
                         onNext = viewModel::nextStudyQuestion,
                         onPrevious = viewModel::previousStudyQuestion,
                         onJumpToIndex = viewModel::jumpToStudyIndex,
-                        onToggleMemorizeMode = viewModel::toggleStudyMemorizeMode,
-                        onToggleRecordStats = viewModel::toggleStudyRecordStats
+                        onToggleMemorizeMode = viewModel::toggleStudyMemorizeMode
                     )
 
                     AppTab.PRACTICE -> PracticeModeScreen(
@@ -188,17 +173,16 @@ fun ModernHistoryQuizApp(
                         onSelectOption = viewModel::selectPracticeOption,
                         onNextQuestion = viewModel::nextPracticeQuestion,
                         onExitMidway = viewModel::exitPracticeMidway,
-                        onResumeSession = viewModel::resumePracticeSession,
                         onStartNewSession = viewModel::startNewPracticeSession,
-                        onGoToHome = { viewModel.selectTab(AppTab.HOME) }
+                        onGoToHome = { viewModel.exitActiveModeToHome() }
                     )
 
                     AppTab.WRONG_DRILL -> WrongDrillModeScreen(
                         uiState = uiState,
+                        onExitMode = { viewModel.exitActiveModeToHome() },
                         onSelectOption = viewModel::selectDrillOption,
                         onNextWeightedQuestion = viewModel::startOrNextWrongDrillQuestion,
-                        onGoToPractice = { viewModel.selectTab(AppTab.PRACTICE) },
-                        onGoToBank = { viewModel.selectTab(AppTab.QUESTION_BANK) }
+                        onGoToPractice = { viewModel.startNewPracticeSession() }
                     )
 
                     AppTab.QUESTION_BANK -> QuestionBankScreen(

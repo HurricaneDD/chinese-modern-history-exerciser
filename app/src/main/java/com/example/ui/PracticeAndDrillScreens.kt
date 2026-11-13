@@ -2,7 +2,9 @@ package com.example.ui
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,19 +17,19 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.Casino
 import androidx.compose.material.icons.filled.CheckCircleOutline
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -42,6 +44,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.ui.theme.CorrectGreen
 import com.example.ui.theme.WrongRed
+import com.example.ui.theme.WrongRedContainer
 
 @Composable
 fun PracticeModeScreen(
@@ -49,7 +52,6 @@ fun PracticeModeScreen(
     onSelectOption: (String) -> Unit,
     onNextQuestion: () -> Unit,
     onExitMidway: () -> Unit,
-    onResumeSession: () -> Unit,
     onStartNewSession: () -> Unit,
     onGoToHome: () -> Unit
 ) {
@@ -131,18 +133,14 @@ fun PracticeModeScreen(
                             )
                         }
 
-                        if (control.practiceIndex < totalInQueue && totalInQueue > 0) {
-                            Button(
-                                onClick = onResumeSession,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(48.dp)
-                                    .testTag("practice_resume_button")
-                            ) {
-                                Icon(Icons.Default.PlayArrow, contentDescription = "继续刷题")
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("继续当前随机队列 (第 ${control.practiceIndex + 1}/$totalInQueue 题)")
-                            }
+                        Button(
+                            onClick = onGoToHome,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp)
+                                .testTag("practice_back_home_button")
+                        ) {
+                            Text("完成并返回首页")
                         }
 
                         OutlinedButton(
@@ -154,17 +152,7 @@ fun PracticeModeScreen(
                         ) {
                             Icon(Icons.Default.Refresh, contentDescription = "重新洗牌")
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("重新打乱全部 156 道题开始新刷题")
-                        }
-
-                        OutlinedButton(
-                            onClick = onGoToHome,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(48.dp)
-                                .testTag("practice_back_home_button")
-                        ) {
-                            Text("返回首页")
+                            Text("重新打乱全部题目开始新一轮")
                         }
                     }
                 }
@@ -172,61 +160,83 @@ fun PracticeModeScreen(
             return
         }
 
-        // Active random practice header
+        // Ultra-compact active random practice header
         Surface(
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 2.dp,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 10.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Column {
                         Text(
-                            text = "随机乱序进度：${control.practiceIndex + 1} / $totalInQueue",
+                            text = "刷题模式 · 随机第 ${control.practiceIndex + 1} / $totalInQueue 题",
                             style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurface
+                            fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "本轮对 ${control.practiceSessionCorrect} · 错 ${control.practiceSessionWrong}（实时记录至题库）",
-                            style = MaterialTheme.typography.bodyMedium,
+                            text = "本轮答对 ${control.practiceSessionCorrect} · 答错 ${control.practiceSessionWrong}（实时记录数据）",
+                            style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
 
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
                             onClick = onStartNewSession,
+                            shape = RoundedCornerShape(10.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
                             modifier = Modifier.testTag("practice_reshuffle_top_button")
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Refresh,
-                                contentDescription = "重洗",
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("重洗")
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Refresh,
+                                    contentDescription = "重洗",
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Text(
+                                    text = "重洗",
+                                    style = MaterialTheme.typography.labelLarge
+                                )
+                            }
                         }
-                        OutlinedButton(
+
+                        Surface(
                             onClick = onExitMidway,
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = WrongRed),
+                            shape = RoundedCornerShape(10.dp),
+                            color = WrongRedContainer,
                             modifier = Modifier.testTag("practice_exit_midway_button")
                         ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ExitToApp,
-                                contentDescription = "半途退出",
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("半途退出")
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ExitToApp,
+                                    contentDescription = "半途退出",
+                                    tint = WrongRed,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Text(
+                                    text = "半途退出",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = WrongRed
+                                )
+                            }
                         }
                     }
                 }
@@ -235,43 +245,44 @@ fun PracticeModeScreen(
                     progress = {
                         if (totalInQueue == 0) 0f else (control.practiceIndex + 1).toFloat() / totalInQueue.toFloat()
                     },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(3.dp)
                 )
             }
         }
 
         if (currentQuestion != null) {
-            Column(
+            Box(
                 modifier = Modifier
                     .weight(1f)
-                    .verticalScroll(rememberScrollState())
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
             ) {
                 QuestionCardComponent(
                     question = currentQuestion,
                     selectedOption = control.practiceSelectedOption,
                     revealAnswer = control.practiceSelectedOption != null,
-                    extraBadgeText = "随机乱序 #${control.practiceIndex + 1}",
-                    onSelectOption = onSelectOption
+                    onSelectOption = onSelectOption,
+                    modifier = Modifier.fillMaxSize()
                 )
             }
 
             Surface(
-                tonalElevation = 3.dp,
+                tonalElevation = 2.dp,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        .padding(horizontal = 12.dp, vertical = 8.dp)
                 ) {
                     Button(
                         onClick = onNextQuestion,
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(48.dp)
+                            .height(42.dp)
                             .testTag("practice_next_button")
                     ) {
                         Text(
@@ -283,8 +294,12 @@ fun PracticeModeScreen(
                                 "下一题 (随机序列)"
                             }
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "下一题")
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowForward,
+                            contentDescription = "下一题",
+                            modifier = Modifier.size(18.dp)
+                        )
                     }
                 }
             }
@@ -295,10 +310,10 @@ fun PracticeModeScreen(
 @Composable
 fun WrongDrillModeScreen(
     uiState: QuizUiState,
+    onExitMode: () -> Unit,
     onSelectOption: (String) -> Unit,
     onNextWeightedQuestion: () -> Unit,
-    onGoToPractice: () -> Unit,
-    onGoToBank: () -> Unit
+    onGoToPractice: () -> Unit
 ) {
     val wrongQuestions = uiState.wrongQuestions
     val currentQuestion = uiState.currentDrillQuestion ?: wrongQuestions.firstOrNull()
@@ -310,7 +325,6 @@ fun WrongDrillModeScreen(
             .testTag("wrong_drill_screen")
     ) {
         if (wrongQuestions.isEmpty() || currentQuestion == null) {
-            // Empty state when no wrong questions exist yet
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -344,7 +358,7 @@ fun WrongDrillModeScreen(
                             style = MaterialTheme.typography.headlineMedium
                         )
                         Text(
-                            text = "错题专练模式只会从你有过做错记录的题目中随机抽取，且错误率越高的题目出现频率越高。你可以先前往「刷题模式」作答，或在「查看题库」中将易错题加入错题集。",
+                            text = "错题专练模式只会从你有过做错记录的题目中随机抽取，且错误率越高的题目出现频率越高。你可以先前往「刷题模式」作答。",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center
@@ -361,13 +375,13 @@ fun WrongDrillModeScreen(
                             Text("前往刷题模式")
                         }
                         OutlinedButton(
-                            onClick = onGoToBank,
+                            onClick = onExitMode,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(48.dp)
-                                .testTag("drill_empty_go_bank")
+                                .testTag("drill_empty_back_home")
                         ) {
-                            Text("前往查看题库")
+                            Text("返回首页")
                         }
                     }
                 }
@@ -375,7 +389,6 @@ fun WrongDrillModeScreen(
             return
         }
 
-        // Calculate relative appearance probability of current question
         val totalWeight = wrongQuestions.sumOf { it.drillWeight }.coerceAtLeast(0.01)
         val currentProbPercent = ((currentQuestion.drillWeight / totalWeight) * 100.0).toInt().coerceAtLeast(1)
 
@@ -384,85 +397,93 @@ fun WrongDrillModeScreen(
             tonalElevation = 2.dp,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Column(
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+                    .padding(horizontal = 6.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = onExitMode,
+                        modifier = Modifier
+                            .size(40.dp)
+                            .testTag("drill_exit_button")
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Psychology,
-                            contentDescription = "错题专练",
-                            tint = WrongRed
-                        )
-                        Text(
-                            text = "错题池共 ${wrongQuestions.size} 道 · 按错误率加权抽题",
-                            style = MaterialTheme.typography.titleMedium
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "退出错题专练"
                         )
                     }
-                    Surface(
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
+                    Column {
                         Text(
-                            text = "本轮已练 ${control.drillSessionAnswered} 题 (再错 ${control.drillSessionWrongAgain})",
+                            text = "错题专练 · 错题池 ${wrongQuestions.size} 道",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "本题错误率 ${currentQuestion.errorRatePercentage}% · 权重占比 ~$currentProbPercent%",
                             style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            color = WrongRed
                         )
                     }
                 }
-                Text(
-                    text = "当前题错误率 ${currentQuestion.errorRatePercentage}%（写过 ${currentQuestion.totalAttempts} 遍 / 写错 ${currentQuestion.wrongAttempts} 遍）· 抽中权重占比约 $currentProbPercent%",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = WrongRed
-                )
+
+                Surface(
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.padding(end = 6.dp)
+                ) {
+                    Text(
+                        text = "已练 ${control.drillSessionAnswered} (再错 ${control.drillSessionWrongAgain})",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
             }
         }
 
-        Column(
+        Box(
             modifier = Modifier
                 .weight(1f)
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp)
         ) {
             QuestionCardComponent(
                 question = currentQuestion,
                 selectedOption = control.drillSelectedOption,
                 revealAnswer = control.drillSelectedOption != null,
-                extraBadgeText = "高频加权错题 · 错误率 ${currentQuestion.errorRatePercentage}%",
-                onSelectOption = onSelectOption
+                extraBadgeText = "错误率 ${currentQuestion.errorRatePercentage}%（写 ${currentQuestion.totalAttempts} 错 ${currentQuestion.wrongAttempts}）",
+                onSelectOption = onSelectOption,
+                modifier = Modifier.fillMaxSize()
             )
         }
 
         Surface(
-            tonalElevation = 3.dp,
+            tonalElevation = 2.dp,
             modifier = Modifier.fillMaxWidth()
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
             ) {
                 Button(
                     onClick = onNextWeightedQuestion,
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(48.dp)
+                        .height(42.dp)
                         .testTag("drill_next_weighted_button")
                 ) {
-                    Icon(Icons.Default.Casino, contentDescription = "加权随机下一题")
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Icon(
+                        Icons.Default.Casino,
+                        contentDescription = "加权随机下一题",
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
                     Text("抽取下一道错题（错误率越高出现概率越高）")
                 }
             }
