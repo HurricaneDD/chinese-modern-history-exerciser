@@ -33,8 +33,8 @@
   - `MainActivity.kt`：应用主入口，配置 Edge-to-Edge、底部双栏导航（仅保留“首页”与“查看题库”），注入 `SharedPreferences` 支持学习进度持久化，并在进入学习/刷题/错题专练模式时进入全屏专注视图。
   - `data/`
     - `QuestionEntity.kt`：Room 题目实体类，包含章节号、题号、题干、A/B/C/D 选项、正确答案、写过遍数 `totalAttempts`、写错遍数 `wrongAttempts`，以及错误率 `errorRate` 和加权专练权重 `drillWeight` 计算属性。
-    - `QuestionDao.kt`：Room 数据访问接口，提供响应式题目流查询、作答记录更新与统计重置。
-    - `AppDatabase.kt`：Room 数据库单例配置。
+    - `QuestionDao.kt` & `QuestionDao_Impl.kt`：Room 数据访问接口及实现类，提供响应式题目流查询、作答记录更新与统计重置。
+    - `AppDatabase.kt` & `AppDatabase_Impl.kt`：Room 数据库单例配置及实现类。
     - `InitialQuestionsPart1.kt`：第一至五章（第 1~71 题）初始题库与答案数据。
     - `InitialQuestionsPart2.kt`：第六至十章（第 72~156 题）初始题库与答案数据。
     - `QuestionRepository.kt`：数据仓库层，负责首次启动自动导入 156 道题目、记录作答数据及错题专练加权随机抽题算法。
@@ -57,3 +57,4 @@
   7. 学习模式新增进度记忆功能（本地持久化章节与题号进度），每次点击进入学习模式时弹窗询问“从头开始”或“继续上次学习的进度”。
   8. 首页区块标题“选择练习模式（单次专注进行一项）”简化为“选择练习模式”。
   9. 全模式（学习模式、刷题模式、错题专练模式）统一支持作答正确后自动跳入下一题（保留短暂绿色正确高亮反馈后自动切题；作答错误时停留在当前题以便查看正确选项）。
+  10. 修复构建环境 KSP `AWT-EventQueue-0` 线程 `ApplicationManager.getApplication()` 空指针异常：将 Room 生成的 `AppDatabase_Impl.kt` 与 `QuestionDao_Impl.kt` 纳入源码并启用 `-Djava.awt.headless=true`。
