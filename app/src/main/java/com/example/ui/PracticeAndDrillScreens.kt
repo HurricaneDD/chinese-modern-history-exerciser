@@ -287,6 +287,7 @@ fun PracticeModeScreen(
                     question = currentQuestion,
                     selectedOption = control.practiceSelectedOption,
                     revealAnswer = control.practiceSelectedOption != null,
+                    showFeedbackBanner = false,
                     onSelectOption = onSelectOption,
                     modifier = Modifier.fillMaxSize()
                 )
