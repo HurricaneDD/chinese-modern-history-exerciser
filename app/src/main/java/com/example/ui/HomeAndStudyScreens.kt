@@ -770,17 +770,19 @@ fun QuestionCardComponent(
                     )
                 }
 
-                Text(
-                    text = "${question.questionNumber}. ${question.questionText}",
-                    style = MaterialTheme.typography.titleLarge.copy(
-                        fontSize = 20.sp,
-                        lineHeight = 28.sp
-                    ),
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier
-                        .padding(top = 2.dp, bottom = 2.dp)
-                        .testTag("question_stem_text")
-                )
+                androidx.compose.foundation.text.selection.SelectionContainer {
+                    Text(
+                        text = "${question.questionNumber}. ${question.questionText}",
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            fontSize = 20.sp,
+                            lineHeight = 28.sp
+                        ),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier
+                            .padding(top = 2.dp, bottom = 2.dp)
+                            .testTag("question_stem_text")
+                    )
+                }
             }
 
             // Middle section: Large, clear options A, B, C, D that fit on screen without scrolling

@@ -58,3 +58,4 @@
   8. 首页区块标题“选择练习模式（单次专注进行一项）”简化为“选择练习模式”。
   9. 全模式（学习模式、刷题模式、错题专练模式）统一支持作答正确后自动跳入下一题（保留短暂绿色正确高亮反馈后自动切题；作答错误时停留在当前题以便查看正确选项）。
   10. 修复构建环境 KSP `AWT-EventQueue-0` 线程 `ApplicationManager.getApplication()` 空指针异常：将 Room 生成的 `AppDatabase_Impl.kt` 与 `QuestionDao_Impl.kt` 纳入源码并启用 `-Djava.awt.headless=true`。
+  11. 支持长按选择和复制题目内容（使用 `SelectionContainer` 包裹题干文本）；刷题模式下移除顶部“重洗”按钮，点击“退出”按钮时弹窗询问用户是否确定退出，并将做错题后的“下一题 (随机序列)”简化为“下一题”。

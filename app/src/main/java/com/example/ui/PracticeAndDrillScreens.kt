@@ -36,6 +36,10 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -58,6 +62,54 @@ fun PracticeModeScreen(
     val control = uiState.control
     val totalInQueue = control.practiceQueueIds.size
     val currentQuestion = uiState.currentPracticeQuestion
+    var showExitConfirmDialog by androidx.compose.runtime.remember {
+        androidx.compose.runtime.mutableStateOf(false)
+    }
+
+    if (control.practiceSessionActive && !control.practiceExitedSummary) {
+        androidx.activity.compose.BackHandler {
+            showExitConfirmDialog = true
+        }
+    }
+
+    if (showExitConfirmDialog) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showExitConfirmDialog = false },
+            title = {
+                Text(
+                    text = "确认退出刷题",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Text(
+                    text = "确定要退出当前刷题模式吗？目前已作答的 ${control.practiceSessionAnswered} 道题记录将会保留。",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showExitConfirmDialog = false
+                        onExitMidway()
+                    },
+                    modifier = Modifier.testTag("practice_confirm_exit_button")
+                ) {
+                    Text("确定退出")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = { showExitConfirmDialog = false },
+                    modifier = Modifier.testTag("practice_cancel_exit_button")
+                ) {
+                    Text("继续刷题")
+                }
+            }
+        )
+    }
 
     Column(
         modifier = Modifier
@@ -100,7 +152,7 @@ fun PracticeModeScreen(
                             text = if (control.practiceIndex + 1 >= totalInQueue && totalInQueue > 0 && control.practiceSessionAnswered >= totalInQueue) {
                                 "本轮随机刷题已完成"
                             } else {
-                                "已半途退出随机刷题"
+                                "已退出随机刷题"
                             },
                             style = MaterialTheme.typography.headlineMedium,
                             textAlign = TextAlign.Center
@@ -187,56 +239,28 @@ fun PracticeModeScreen(
                         )
                     }
 
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                    Surface(
+                        onClick = { showExitConfirmDialog = true },
+                        shape = RoundedCornerShape(10.dp),
+                        color = WrongRedContainer,
+                        modifier = Modifier.testTag("practice_exit_midway_button")
                     ) {
-                        Surface(
-                            onClick = onStartNewSession,
-                            shape = RoundedCornerShape(10.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant,
-                            modifier = Modifier.testTag("practice_reshuffle_top_button")
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Refresh,
-                                    contentDescription = "重洗",
-                                    modifier = Modifier.size(15.dp)
-                                )
-                                Text(
-                                    text = "重洗",
-                                    style = MaterialTheme.typography.labelLarge
-                                )
-                            }
-                        }
-
-                        Surface(
-                            onClick = onExitMidway,
-                            shape = RoundedCornerShape(10.dp),
-                            color = WrongRedContainer,
-                            modifier = Modifier.testTag("practice_exit_midway_button")
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.ExitToApp,
-                                    contentDescription = "半途退出",
-                                    tint = WrongRed,
-                                    modifier = Modifier.size(15.dp)
-                                )
-                                Text(
-                                    text = "半途退出",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    color = WrongRed
-                                )
-                            }
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ExitToApp,
+                                contentDescription = "退出",
+                                tint = WrongRed,
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Text(
+                                text = "退出",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = WrongRed
+                            )
                         }
                     }
                 }
@@ -291,7 +315,7 @@ fun PracticeModeScreen(
                             } else if (control.practiceIndex + 1 >= totalInQueue) {
                                 "完成本轮刷题"
                             } else {
-                                "下一题 (随机序列)"
+                                "下一题"
                             }
                         )
                         Spacer(modifier = Modifier.width(6.dp))

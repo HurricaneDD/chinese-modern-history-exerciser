@@ -330,17 +330,25 @@ private fun BankQuestionItemCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text(
-                    text = question.questionText,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
+                androidx.compose.foundation.text.selection.SelectionContainer(
                     modifier = Modifier.weight(1f)
-                )
-                Icon(
-                    imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                    contentDescription = if (expanded) "收起选项" else "展开选项",
-                    tint = MaterialTheme.colorScheme.outline
-                )
+                ) {
+                    Text(
+                        text = question.questionText,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                IconButton(
+                    onClick = { expanded = !expanded },
+                    modifier = Modifier.size(28.dp)
+                ) {
+                    Icon(
+                        imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        contentDescription = if (expanded) "收起选项" else "展开选项",
+                        tint = MaterialTheme.colorScheme.outline
+                    )
+                }
             }
 
             AnimatedVisibility(visible = expanded) {
