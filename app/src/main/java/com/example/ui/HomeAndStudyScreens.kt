@@ -236,13 +236,8 @@ private fun HeroBannerCard(
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     StatMiniPill(
-                        label = "已刷题目",
-                        value = "${uiState.attemptedQuestionsCount}/${uiState.totalQuestionsCount}",
-                        modifier = Modifier.weight(1f)
-                    )
-                    StatMiniPill(
                         label = "累计刷题",
-                        value = "${uiState.totalAttemptsSum} 遍",
+                        value = "${uiState.totalAttemptsSum} 道",
                         modifier = Modifier.weight(1f)
                     )
                     StatMiniPill(
@@ -282,7 +277,7 @@ private fun HeroBannerCard(
                                     modifier = Modifier.size(18.dp)
                                 )
                                 Text(
-                                    text = "你有 ${uiState.wrongQuestionsCount} 道错题，点击按错误率从高到低查看",
+                                    text = "你有${uiState.wrongQuestionsCount}道错题，点击查看",
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = Color.White
                                 )
