@@ -39,14 +39,13 @@ data class QuestionEntity(
 
     /**
      * Weight used in Wrong-Question Drill Mode (错题专练模式):
-     * Higher error rate -> significantly higher selection probability.
+     * Higher error rate -> strictly higher probability of being drawn earlier in a cycle.
      */
     val drillWeight: Double
         get() {
             if (wrongAttempts <= 0) return 0.0
-            val rate = errorRate.toDouble().coerceAtLeast(0.08)
-            // Weight scales nonlinearly with errorRate so high-error-rate items appear much more frequently,
-            // with a small tie-breaker bonus for higher wrongAttempts.
-            return (rate * rate * 100.0) + (rate * 35.0) + (wrongAttempts.coerceAtMost(10) * 1.5)
+            val rate = errorRate.toDouble().coerceIn(0.001, 1.0)
+            // Monotonically increasing with errorRate; wrongAttempts only breaks exact ties.
+            return (rate * rate * 100.0) + (rate * 25.0) + (wrongAttempts.coerceAtMost(100) * 1e-6)
         }
 }

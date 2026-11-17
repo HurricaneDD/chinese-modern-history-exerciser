@@ -31,6 +31,12 @@ class QuestionRepository(private val questionDao: QuestionDao) {
     }
 
     companion object {
+        data class CyclePickResult(
+            val question: QuestionEntity?,
+            val cycleNumber: Int,
+            val seenIdsAfterTransition: Set<Int>
+        )
+
         /**
          * Weighted random selection for Wrong-Question Drill Mode (错题专练模式).
          * Questions with higher error rates have a higher probability of being picked.
@@ -57,6 +63,68 @@ class QuestionRepository(private val questionDao: QuestionDao) {
                 }
             }
             return pool.last()
+        }
+
+        /**
+         * Periodic (cyclic) weighted random selection without replacement within each cycle.
+         * Every wrong question is drawn once per cycle; within a cycle, questions with higher
+         * error rates have a strictly higher probability of being drawn earlier.
+         *
+         * @param wrongQuestions All current wrong questions (wrongAttempts > 0).
+         * @param seenIdsInCycle Question IDs already completed in the current cycle.
+         * @param currentCycleNumber Current 1-based cycle index.
+         * @param completedQuestionId Optional ID of the question just finished/skipped to mark as seen.
+         * @param random Random instance for deterministic testing.
+         */
+        fun pickCycleWrongQuestion(
+            wrongQuestions: List<QuestionEntity>,
+            seenIdsInCycle: Set<Int>,
+            currentCycleNumber: Int,
+            completedQuestionId: Int? = null,
+            random: Random = Random.Default
+        ): CyclePickResult {
+            val eligibleAll = wrongQuestions.filter { it.wrongAttempts > 0 }
+            if (eligibleAll.isEmpty()) {
+                return CyclePickResult(
+                    question = null,
+                    cycleNumber = 1,
+                    seenIdsAfterTransition = emptySet()
+                )
+            }
+
+            val validIds = eligibleAll.map { it.id }.toSet()
+            val updatedSeen = buildSet {
+                addAll(seenIdsInCycle.intersect(validIds))
+                if (completedQuestionId != null && completedQuestionId in validIds) {
+                    add(completedQuestionId)
+                }
+            }
+
+            val remaining = eligibleAll.filter { it.id !in updatedSeen }
+            return if (remaining.isEmpty()) {
+                val nextCycle = currentCycleNumber.coerceAtLeast(1) + 1
+                val picked = pickWeightedWrongQuestion(
+                    wrongQuestions = eligibleAll,
+                    lastQuestionId = completedQuestionId,
+                    random = random
+                )
+                CyclePickResult(
+                    question = picked,
+                    cycleNumber = nextCycle,
+                    seenIdsAfterTransition = emptySet()
+                )
+            } else {
+                val picked = pickWeightedWrongQuestion(
+                    wrongQuestions = remaining,
+                    lastQuestionId = completedQuestionId,
+                    random = random
+                )
+                CyclePickResult(
+                    question = picked,
+                    cycleNumber = currentCycleNumber.coerceAtLeast(1),
+                    seenIdsAfterTransition = updatedSeen
+                )
+            }
         }
     }
 }

@@ -48,12 +48,14 @@ data class InternalControlState(
     val practiceSessionAnswered: Int = 0,
     val practiceSessionCorrect: Int = 0,
     val practiceSessionWrong: Int = 0,
-    // Wrong-Question Drill Mode (错题专练模式：加权随机错题，再次写错记录)
+    // Wrong-Question Drill Mode (错题专练模式：周期化加权随机错题，同周期内错误率越高越先抽到)
     val drillCurrentQuestionId: Int? = null,
     val drillSelectedOption: String? = null,
     val drillSessionAnswered: Int = 0,
     val drillSessionWrongAgain: Int = 0,
     val drillSessionCorrect: Int = 0,
+    val drillCycleNumber: Int = 1,
+    val drillCycleSeenIds: Set<Int> = emptySet(),
     // Question Bank Mode (查看题库：展示遍数/错数/错误率，专门展示错题，按错误率排序)
     val bankOnlyWrong: Boolean = false,
     val bankSortOrder: BankSortOrder = BankSortOrder.SEQUENTIAL,
@@ -167,15 +169,25 @@ class QuizViewModel(
     companion object {
         private const val KEY_SAVED_STUDY_CHAPTER = "saved_study_chapter"
         private const val KEY_SAVED_STUDY_INDEX = "saved_study_index"
+        private const val KEY_DRILL_CYCLE_NUMBER = "drill_cycle_number"
+        private const val KEY_DRILL_CYCLE_SEEN_IDS = "drill_cycle_seen_ids"
     }
 
     private val initialSavedChapter: Int? = prefs?.getInt(KEY_SAVED_STUDY_CHAPTER, -1)?.takeIf { it in 1..10 }
     private val initialSavedIndex: Int = prefs?.getInt(KEY_SAVED_STUDY_INDEX, 0)?.coerceAtLeast(0) ?: 0
+    private val initialDrillCycleNumber: Int = prefs?.getInt(KEY_DRILL_CYCLE_NUMBER, 1)?.coerceAtLeast(1) ?: 1
+    private val initialDrillCycleSeenIds: Set<Int> = prefs?.getString(KEY_DRILL_CYCLE_SEEN_IDS, "")
+        ?.split(",")
+        ?.mapNotNull { it.trim().toIntOrNull() }
+        ?.toSet()
+        ?: emptySet()
 
     private val controlState = MutableStateFlow(
         InternalControlState(
             savedStudyChapterFilter = initialSavedChapter,
-            savedStudyIndex = initialSavedIndex
+            savedStudyIndex = initialSavedIndex,
+            drillCycleNumber = initialDrillCycleNumber,
+            drillCycleSeenIds = initialDrillCycleSeenIds
         )
     )
 
@@ -211,6 +223,13 @@ class QuizViewModel(
         prefs?.edit()
             ?.putInt(KEY_SAVED_STUDY_CHAPTER, chapter ?: -1)
             ?.putInt(KEY_SAVED_STUDY_INDEX, index)
+            ?.apply()
+    }
+
+    private fun persistDrillCycle(cycleNumber: Int, seenIds: Set<Int>) {
+        prefs?.edit()
+            ?.putInt(KEY_DRILL_CYCLE_NUMBER, cycleNumber)
+            ?.putString(KEY_DRILL_CYCLE_SEEN_IDS, seenIds.joinToString(","))
             ?.apply()
     }
 
@@ -468,20 +487,29 @@ class QuizViewModel(
         }
     }
 
-    // ---------------- Wrong-Question Drill Mode Actions (错题专练模式) ----------------
+    // ---------------- Wrong-Question Drill Mode Actions (错题专练模式：周期化加权随机) ----------------
     fun enterWrongDrillMode() {
         cancelAutoAdvance()
         val wrongList = uiState.value.wrongQuestions
-        val picked = QuestionRepository.pickWeightedWrongQuestion(wrongQuestions = wrongList)
+        val currentState = controlState.value
+        val result = QuestionRepository.pickCycleWrongQuestion(
+            wrongQuestions = wrongList,
+            seenIdsInCycle = currentState.drillCycleSeenIds,
+            currentCycleNumber = currentState.drillCycleNumber,
+            completedQuestionId = null
+        )
+        persistDrillCycle(result.cycleNumber, result.seenIdsAfterTransition)
         controlState.update {
             it.copy(
                 currentTab = AppTab.WRONG_DRILL,
                 showStudyEntryDialog = false,
-                drillCurrentQuestionId = picked?.id,
+                drillCurrentQuestionId = result.question?.id,
                 drillSelectedOption = null,
                 drillSessionAnswered = 0,
                 drillSessionWrongAgain = 0,
                 drillSessionCorrect = 0,
+                drillCycleNumber = result.cycleNumber,
+                drillCycleSeenIds = result.seenIdsAfterTransition,
                 practiceQueueIds = emptyList(),
                 practiceSessionActive = false,
                 practiceExitedSummary = false
@@ -492,16 +520,21 @@ class QuizViewModel(
     fun startOrNextWrongDrillQuestion() {
         cancelAutoAdvance()
         val wrongList = uiState.value.wrongQuestions
-        val currentId = controlState.value.drillCurrentQuestionId
-        val picked = QuestionRepository.pickWeightedWrongQuestion(
+        val currentState = controlState.value
+        val result = QuestionRepository.pickCycleWrongQuestion(
             wrongQuestions = wrongList,
-            lastQuestionId = currentId
+            seenIdsInCycle = currentState.drillCycleSeenIds,
+            currentCycleNumber = currentState.drillCycleNumber,
+            completedQuestionId = currentState.drillCurrentQuestionId
         )
+        persistDrillCycle(result.cycleNumber, result.seenIdsAfterTransition)
         controlState.update {
             it.copy(
                 currentTab = AppTab.WRONG_DRILL,
-                drillCurrentQuestionId = picked?.id,
-                drillSelectedOption = null
+                drillCurrentQuestionId = result.question?.id,
+                drillSelectedOption = null,
+                drillCycleNumber = result.cycleNumber,
+                drillCycleSeenIds = result.seenIdsAfterTransition
             )
         }
     }
@@ -585,13 +618,16 @@ class QuizViewModel(
     fun resetAllStats() {
         viewModelScope.launch {
             repository.resetAllStats()
+            persistDrillCycle(cycleNumber = 1, seenIds = emptySet())
             controlState.update {
                 it.copy(
                     drillCurrentQuestionId = null,
                     drillSelectedOption = null,
                     drillSessionAnswered = 0,
                     drillSessionWrongAgain = 0,
-                    drillSessionCorrect = 0
+                    drillSessionCorrect = 0,
+                    drillCycleNumber = 1,
+                    drillCycleSeenIds = emptySet()
                 )
             }
         }

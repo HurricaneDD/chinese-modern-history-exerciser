@@ -132,7 +132,7 @@ fun HomeScreen(
         item {
             ModeActionCard(
                 title = "错题专练模式",
-                subtitle = "仅从错题集中随机抽题，错误率越高的题目出现频率越高，再次写错实时记录",
+                subtitle = "按周期从错题集中随机抽题，同周期内错误率越高的题目越先抽到，再次写错实时记录",
                 badgeText = "当前错题 ${uiState.wrongQuestionsCount} 道",
                 icon = Icons.Default.Psychology,
                 accentColor = WrongRed,

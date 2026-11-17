@@ -11,7 +11,7 @@
     <string name="mode_practice_title">刷题模式</string>
     <string name="mode_practice_desc">全题库156道题随机打乱顺序作答，实时记录对错数据，随时可半途退出</string>
     <string name="mode_wrong_title">错题专练模式</string>
-    <string name="mode_wrong_desc">仅随机抽取错题，错误率越高出现频率越高，再次写错实时累加记录</string>
+    <string name="mode_wrong_desc">按周期从错题集中随机抽题，同周期内错误率越高的题目越先抽到，再次写错实时累加记录</string>
     <string name="mode_bank_title">查看题库</string>
     <string name="mode_bank_desc">浏览全量题库与答案，展示写过遍数、写错遍数及错误率，支持错题筛选与排序</string>
 </resources>

@@ -383,7 +383,7 @@ fun WrongDrillModeScreen(
                             style = MaterialTheme.typography.headlineMedium
                         )
                         Text(
-                            text = "错题专练模式只会从你有过做错记录的题目中随机抽取，且错误率越高的题目出现频率越高。你可以先前往「刷题模式」作答。",
+                            text = "错题专练模式按周期从错题集中随机抽题，同一周期内每道错题都会练到，且错误率越高的题目越容易先被抽到。你可以先前往「刷题模式」作答。",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center
@@ -414,59 +414,78 @@ fun WrongDrillModeScreen(
             return
         }
 
-        val totalWeight = wrongQuestions.sumOf { it.drillWeight }.coerceAtLeast(0.01)
-        val currentProbPercent = ((currentQuestion.drillWeight / totalWeight) * 100.0).toInt().coerceAtLeast(1)
+        val remainingInCycle = wrongQuestions.filter { it.id !in control.drillCycleSeenIds }
+        val seenCountInCycle = (wrongQuestions.size - remainingInCycle.size).coerceAtLeast(0)
+        val currentPosInCycle = (seenCountInCycle + 1).coerceAtMost(wrongQuestions.size)
+        val effectivePool = if (remainingInCycle.any { it.id == currentQuestion.id }) {
+            remainingInCycle
+        } else {
+            remainingInCycle + currentQuestion
+        }
+        val remainingWeight = effectivePool.sumOf { it.drillWeight }.coerceAtLeast(0.01)
+        val currentProbPercent = ((currentQuestion.drillWeight / remainingWeight) * 100.0).toInt().coerceIn(1, 100)
 
         Surface(
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 2.dp,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 6.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(
-                        onClick = onExitMode,
-                        modifier = Modifier
-                            .size(40.dp)
-                            .testTag("drill_exit_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "退出错题专练"
-                        )
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 6.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(
+                            onClick = onExitMode,
+                            modifier = Modifier
+                                .size(40.dp)
+                                .testTag("drill_exit_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "退出错题专练"
+                            )
+                        }
+                        Column {
+                            Text(
+                                text = "错题专练 · 第${control.drillCycleNumber}周期 ($currentPosInCycle/${wrongQuestions.size})",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "错误率 ${currentQuestion.errorRatePercentage}% · 本周期先抽权重 ~$currentProbPercent%",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = WrongRed
+                            )
+                        }
                     }
-                    Column {
+
+                    Surface(
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.padding(end = 6.dp)
+                    ) {
                         Text(
-                            text = "错题专练 · 错题池 ${wrongQuestions.size} 道",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "本题错误率 ${currentQuestion.errorRatePercentage}% · 权重占比 ~$currentProbPercent%",
+                            text = "已练 ${control.drillSessionAnswered} (再错 ${control.drillSessionWrongAgain})",
                             style = MaterialTheme.typography.labelMedium,
-                            color = WrongRed
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                         )
                     }
                 }
 
-                Surface(
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                    shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.padding(end = 6.dp)
-                ) {
-                    Text(
-                        text = "已练 ${control.drillSessionAnswered} (再错 ${control.drillSessionWrongAgain})",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
-                }
+                LinearProgressIndicator(
+                    progress = {
+                        if (wrongQuestions.isEmpty()) 0f else currentPosInCycle.toFloat() / wrongQuestions.size.toFloat()
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(3.dp)
+                )
             }
         }
 
@@ -480,6 +499,7 @@ fun WrongDrillModeScreen(
                 question = currentQuestion,
                 selectedOption = control.drillSelectedOption,
                 revealAnswer = control.drillSelectedOption != null,
+                showFeedbackBanner = false,
                 extraBadgeText = "错误率 ${currentQuestion.errorRatePercentage}%（写 ${currentQuestion.totalAttempts} 错 ${currentQuestion.wrongAttempts}）",
                 onSelectOption = onSelectOption,
                 modifier = Modifier.fillMaxSize()
@@ -509,7 +529,13 @@ fun WrongDrillModeScreen(
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("抽取下一道错题（错误率越高出现概率越高）")
+                    Text(
+                        if (remainingInCycle.size <= 1) {
+                            "完成第${control.drillCycleNumber}周期 · 开启下一周期"
+                        } else {
+                            "下一道错题（同周期按错误率优先）"
+                        }
+                    )
                 }
             }
         }
