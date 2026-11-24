@@ -192,8 +192,8 @@ fun ModernHistoryQuizApp(
                         onSetChapterFilter = viewModel::setBankChapterFilter,
                         onSetSearchQuery = viewModel::setBankSearchQuery,
                         onMarkWrongOnce = viewModel::markQuestionWrongOnce,
-                        onResetQuestionStats = viewModel::resetSingleQuestionStats,
-                        onResetAllStats = viewModel::resetAllStats
+                        onDecrementWrongOnce = viewModel::decrementQuestionWrongOnce,
+                        onResetQuestionStats = viewModel::resetSingleQuestionStats
                     )
                 }
             }

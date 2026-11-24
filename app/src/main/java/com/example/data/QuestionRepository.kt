@@ -18,6 +18,18 @@ class QuestionRepository(private val questionDao: QuestionDao) {
         questionDao.recordAnswer(questionId = questionId, isWrong = isWrong)
     }
 
+    suspend fun decrementWrongOnce(questionId: Int) {
+        val target = questionDao.getAllQuestionsOnce().firstOrNull { it.id == questionId } ?: return
+        if (target.wrongAttempts <= 0) return
+        val newWrong = (target.wrongAttempts - 1).coerceAtLeast(0)
+        val newTotal = (target.totalAttempts - 1).coerceAtLeast(newWrong)
+        questionDao.updateStats(
+            questionId = questionId,
+            totalAttempts = newTotal,
+            wrongAttempts = newWrong
+        )
+    }
+
     suspend fun updateStats(questionId: Int, totalAttempts: Int, wrongAttempts: Int) {
         questionDao.updateStats(
             questionId = questionId,

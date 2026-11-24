@@ -22,10 +22,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddAlert
 import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.RemoveCircleOutline
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Sort
@@ -64,8 +64,8 @@ fun QuestionBankScreen(
     onSetChapterFilter: (Int?) -> Unit,
     onSetSearchQuery: (String) -> Unit,
     onMarkWrongOnce: (Int) -> Unit,
-    onResetQuestionStats: (Int) -> Unit,
-    onResetAllStats: () -> Unit
+    onDecrementWrongOnce: (Int) -> Unit,
+    onResetQuestionStats: (Int) -> Unit
 ) {
     val control = uiState.control
     val questions = uiState.filteredBankQuestions
@@ -181,20 +181,6 @@ fun QuestionBankScreen(
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.primary
                     )
-                    if (uiState.totalAttemptsSum > 0) {
-                        TextButton(
-                            onClick = onResetAllStats,
-                            modifier = Modifier.testTag("bank_reset_all_stats_button")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.DeleteSweep,
-                                contentDescription = "清空全部统计",
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("清空全部统计")
-                        }
-                    }
                 }
             }
         }
@@ -225,6 +211,7 @@ fun QuestionBankScreen(
                     BankQuestionItemCard(
                         question = question,
                         onMarkWrongOnce = { onMarkWrongOnce(question.id) },
+                        onDecrementWrongOnce = { onDecrementWrongOnce(question.id) },
                         onResetStats = { onResetQuestionStats(question.id) }
                     )
                 }
@@ -238,6 +225,7 @@ fun QuestionBankScreen(
 private fun BankQuestionItemCard(
     question: QuestionEntity,
     onMarkWrongOnce: () -> Unit,
+    onDecrementWrongOnce: () -> Unit,
     onResetStats: () -> Unit
 ) {
     var expanded by remember { mutableStateOf(true) }
@@ -393,7 +381,7 @@ private fun BankQuestionItemCard(
                         }
                     }
 
-                    Row(
+                    FlowRow(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.End
                     ) {
@@ -408,6 +396,19 @@ private fun BankQuestionItemCard(
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text("记错一次")
+                        }
+                        TextButton(
+                            onClick = onDecrementWrongOnce,
+                            enabled = question.wrongAttempts > 0,
+                            modifier = Modifier.testTag("bank_unmark_wrong_${question.id}")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.RemoveCircleOutline,
+                                contentDescription = "减少错题一次",
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("减错一次")
                         }
                         if (question.totalAttempts > 0) {
                             TextButton(

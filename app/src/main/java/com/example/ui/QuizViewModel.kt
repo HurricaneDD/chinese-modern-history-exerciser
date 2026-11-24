@@ -609,6 +609,12 @@ class QuizViewModel(
         }
     }
 
+    fun decrementQuestionWrongOnce(questionId: Int) {
+        viewModelScope.launch {
+            repository.decrementWrongOnce(questionId = questionId)
+        }
+    }
+
     fun resetSingleQuestionStats(questionId: Int) {
         viewModelScope.launch {
             repository.updateStats(questionId = questionId, totalAttempts = 0, wrongAttempts = 0)
